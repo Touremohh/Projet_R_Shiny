@@ -1,0 +1,687 @@
+
+# packages = c('shiny', 'leaflet', 'DT', 'shinythemes', 'ggplot2', 'tidygeocoder', 'dplyr', 'httr', 'jsonlite', 'RMySQL', 'plotly')
+# install.packages(packages)
+# lapply(packages, library, character.only = TRUE)
+
+
+if (!requireNamespace("packrat", quietly = TRUE)) {
+  install.packages("packrat")
+}
+
+
+if (!file.exists("packrat/packrat.lock")) {
+  packrat::init()
+}
+
+
+library(shiny)
+library(leaflet)
+library(DT)
+library(shinythemes)
+library(ggplot2)
+library(tidygeocoder)
+library(dplyr)
+library(httr)
+library(jsonlite)
+library(RMySQL)
+library(plotly)
+
+
+
+
+
+
+#Extraction de données avec l'API
+base = "https://api.jcdecaux.com/vls/v3/stations?contract=Lyon&apiKey=3df62db69734d75dc0309f2c30106df2d1675f24"
+contract = 'Lyon'
+info_key = '3df62db69734d75dc0309f2c30106df2d1675f24'
+
+API_URL = paste0('https://api.jcdecaux.com/vls/v3/stations?contract=',contract,'&apiKey=',info_key)
+raw_data = GET(API_URL)
+
+VELOVS = fromJSON(rawToChar(raw_data$content), flatten = TRUE)
+
+#Création des codes postaux
+VELOVS = reverse_geocode(VELOVS, lat = position.latitude, long = position.longitude, method = 'osm',
+                         address = address, full_results = TRUE)
+#Connexion database
+#con = dbConnect(MySQL(),
+#                user='sql11646645',
+#               password='XbBf8r3R2k',
+#              host='sql11.freesqldatabase.com',
+#             dbname='sql11646645')
+
+#summary(con)
+
+#Création des codes postaux
+#VELOVS = reverse_geocode(VELOVS, lat = position.latitude, long = position.longitude, method = 'osm',
+#address = address, full_results = TRUE)
+
+#Formation database
+#dbGetInfo(con)
+
+#Stations = VELOVS[,c("number","name")]
+#Communes = VELOVS[,c("city","postcode","suburb")]
+#tat = VELOVS[,c("bike_stands","available_bike_stands","avaiable_bikes")]
+
+#Alimentation bdd
+#dbwritetable(con,"Stations", Stations, append = TRUE)
+#dbwritetable(con, "Communes", Communes, append = TRUE)
+#dbwritetable(con, "Etat", Etat, apped = TRUE)
+
+
+# Récupérer les communes uniques de VELOVS
+suburbs_with_all <- unique(VELOVS$suburb)
+suburbs_with_all <- c("Tous", suburbs_with_all)
+
+auth_df <- data.frame(
+  nom_utilisateur = c("utilisateur1", "utilisateur2"),
+  mot_de_passe = c("password1", "password2"),
+  role = c("admin", "utilisateur")
+)
+
+
+# Interface utilisateur (UI)
+
+
+install.packages("webshot")
+library(webshot)
+
+ui <- fluidPage(
+  theme = shinytheme("flatly"),
+  
+  
+  tags$head(
+    tags$style(
+      HTML("
+      .indicator-box { background: linear-gradient(to right, #6AE8FC, #6AE8FC); color: yellow ; padding: 20px; border-radius: 10px; }
+      .date-input { background: #6AE8FC; color: gray; border: none; border-radius: 5px; padding: 10px; margin: 10px; }
+      .box-style { background-color: #6AE8FC; border: 2px solid #333333; border-radius: 10px; padding: 20px; }
+      .box-red { background-color: #FD7104; border: 2px solid #11E5A8; border-radius: 10px; padding: 20px; }
+      .map-leaflet { height: 1200 !important; }
+
+      /* Styles pour les onglets à gauche */
+      .ui-tabs-left {
+        position: relative;
+        float: left;
+        width: 250px; /* Ajustez la largeur selon vos besoins */
+        margin-right: 20px; /* Ajoutez de l'espace entre les onglets et le contenu */
+      }
+
+      /* Styling des en-têtes d'onglets */
+      .ui-tabs-left .ui-tabs-nav {
+        background-color: lightblue; /* Couleur de fond des onglets */
+      }
+
+      /* Styling des onglets individuels */
+      .ui-tabs-left .ui-tabs-nav li {
+        border-top: 1px solid #da614e; /* Ajoute une bordure au-dessus de chaque onglet */
+        border-bottom: 1px solid #da614e; /* Ajoute une bordure en dessous de chaque onglet */
+        padding: 5px 10px; /* Ajustez la marge selon vos besoins */
+        cursor: pointer;
+      }
+
+      /* Styling de l'onglet sélectionné */
+      .ui-tabs-left .ui-tabs-nav li.ui-state-active {
+        background-color: white; /* Couleur de fond de l'onglet actif */
+        color: red; /* Couleur du texte de l'onglet actif */
+          ")
+    )
+  ),
+  tabsetPanel(
+    id = "tabs", 
+    #Onglet Acceuil
+    tabPanel("Accueil",icon = icon("home"),
+             div(
+               style = "text-align: center;",
+               h1(
+                 style = "color: red;",
+                 "Explorez la Mobilité avec BikeFinder"
+               ),
+               p(
+                 style = "line-height: 1.6;",
+                 "Bienvenue dans l'avenir de la mobilité ! Bike Finder est votre outil indispensable pour suivre la disponibilité de vélos, les supports de vélos et accéder à des statistiques en temps réel."
+               ),
+               p(
+                 style = "line-height: 1.6;",
+                 "Nous mettons la puissance de la mobilité entre vos mains."
+               ),
+               h3("Découvrez nos Fonctionnalités Clés :"),
+               p(
+                 style = "line-height: 1.6; font-weight: bold; font-style: italic;",
+                 "Disponibilité des Vélos :"
+               ),
+               p(
+                 style = "line-height: 1.6;",
+                 "Notre application vous permet de savoir instantanément où se trouvent les vélos disponibles à proximité. Plus besoin de perdre du temps à chercher un vélo !"
+               ),
+               p(
+                 style = "line-height: 1.6; font-weight: bold; font-style: italic;",
+                 "Supports de Vélos :"
+               ),
+               p(
+                 style = "line-height: 1.6;",
+                 "Vous pouvez également voir la disponibilité des supports de vélos, pour planifier vos trajets en toute sérénité."
+               ),
+               p(
+                 style = "line-height: 1.6; font-weight: bold; font-style: italic;",
+                 "Statistiques Perspicaces :"
+               ),
+               p(
+                 style = "line-height: 1.6;",
+                 "Accédez à des graphiques et des statistiques pour mieux comprendre l'utilisation des vélos dans votre région. Prenez des décisions éclairées."
+               ),
+               h3("Fenêtre Interactive de Carte :"),
+               p(
+                 style = "line-height: 1.6;",
+                 "Notre fenêtre de carte intuitive vous permet de visualiser en temps réel l'emplacement des stations de vélos, la disponibilité, et bien plus encore. Planifiez vos itinéraires avec facilité."
+               ),
+               h3("Base de Données Complète :"),
+               p(
+                 style = "line-height: 1.6;",
+                 "La dernière fenêtre de BikeFinder vous donne un accès direct à notre base de données complète. Explorez les détails des stations, consultez l'historique des données et plus encore."
+               ),
+               p(
+                 style = "line-height: 1.6; font-weight: bold; font-style: italic;",
+                 "Essayez dès Maintenant !"
+               ),
+               actionButton("startButton", "Commencer")
+             )
+    ),
+    #Onglet Statistiques
+    tabPanel("Statistiques",icon = icon("chart-bar"),
+             titlePanel("Information_Stations", windowTitle = "Vélos en libre-service"),
+             sidebarPanel(
+               fluidRow(
+                 selectInput("selected_suburb", "Sélectionnez une commune :", choices = suburbs_with_all),
+                 br(),
+                 div(class = "box-style",
+                     h4("Statut"),
+                     verbatimTextOutput("status_indicator")
+                 )
+               ),
+               br(),
+               div(class = "box-style",
+                   h4("supports à vélo"),
+                   verbatimTextOutput("bike_stands_indicator")
+               ),
+               br(),
+               div(class = "box-style",
+                   h4("Nombre de Velos disponibles"),
+                   verbatimTextOutput("available_bikes_indicator")
+               ),
+               br(),
+               selectInput("top_stations_filter", "Nombre de stations avec le plus de vélos disponibles:", c(5, 10, 20))
+             )
+             ,
+             sidebarPanel(
+               fluidRow(
+                 div(
+                   style = sprintf("background-color: %s;", "#6AE8FC"),
+                   fluidRow(
+                     column(12,
+                            downloadButton('ExportPlot', 'Export as png'),
+                            selectInput("export_graph", "Choisir le graphique à exporter",
+                                        choices = c("Graphique 1", "Graphique 2", "Graphique 3"),
+                                        selected = "Graphique 1"),
+                            div(class = "bar-chart", plotlyOutput("top_stations_bar")),
+                            div(class = "point-cloud-chart", plotOutput("point_cloud_plot"))
+                            
+                     )
+                   )
+                 )
+               )
+             ),
+             sidebarPanel(
+               fluidRow(
+                 div(
+                   style = sprintf("background-color: %s;", "#FD7104"),
+                   fluidRow(
+                     column(12,
+                            div(class = "box-red",
+                                div(class = "pie-chart", plotlyOutput("bike_stands_pie")),
+                                div(class = "bar-chart", plotlyOutput("bike_stands_bar")),
+                                
+                            )
+                            
+                     )
+                   )
+                 )
+               )
+             )
+             
+             
+             
+             
+    ),
+    #Onglet Carte
+    tabPanel("Carte Stations", icon = icon("map"),
+             sidebarLayout(
+               sidebarPanel("Carte des stations", width = 3),
+               mainPanel(
+                 style = "height: 800px;",  # Ajustez la hauteur ici
+                 leafletOutput("map_leaflet")
+               )
+             )
+    ),
+    
+    
+    
+   #Onglet Base de DOnnées 
+    tabPanel("Base de données", icon = icon("database"),
+             fluidPage(
+               fluidRow(
+                 column(8,
+                        textInput("username", "Nom d'utilisateur"),
+                        passwordInput("password", "Mot de passe"),
+                        actionButton("loginButton", "Se connecter")
+                 ),
+                 column(6,
+                        selectInput("name", "Nom:", c("Toutes les stations", unique(as.character(VELOVS$name))),
+                        ),
+                        selectInput("address", "Adresse:", c("Toutes les adresses", unique(as.character(VELOVS$address)))
+                        ),
+                        actionButton("addStationButton", "Ajouter une station"),
+                        actionButton("deleteStationButton", "Supprimer une Station")
+                        
+                        
+                 )
+               ),
+               dataTableOutput("table_db")
+             )
+    )
+  )
+  
+)
+
+
+
+server <- function(input, output, session) {
+  observeEvent(input$startButton, {
+    updateTabsetPanel(session, "tabs", selected = "Statistiques")
+  })
+  observeEvent(input$deleteStationButton, {
+    user <- isolate(input$username)
+    user_info <- auth_df[auth_df$nom_utilisateur == user, ]
+    
+    if (nrow(user_info) > 0 && user_info$role == "admin") {
+      # Utilisateur connecté en tant qu'administrateur
+      
+      showModal(
+        modalDialog(
+          title = "Supprimer une Station",
+          selectInput("stationToDelete", "Sélectionnez le numéro de la station à supprimer", choices = unique(as.character(VELOVS$number))),
+          actionButton("confirmDeleteButton", "Confirmer la suppression"),
+          footer = modalButton("Fermer")
+        )
+      )
+    } else {
+      showModal(
+        modalDialog(
+          title = "Opération non autorisée",
+          "Vous n'êtes pas autorisé à supprimer une station.",
+          footer = modalButton("Fermer")
+        )
+      )
+    }
+  })
+  
+  # Observer pour afficher les informations de la station sélectionnée
+  observeEvent(input$confirmDeleteButton, {
+    station_to_delete <- input$stationToDelete
+    
+    # Récupérer toutes les informations de la station depuis la base de données MySQL
+    station_info <- dbGetQuery(con, paste("SELECT * FROM VELOVS WHERE number = '", station_to_delete, "'"))
+    
+    # Afficher les informations de la station
+    showModal(
+      modalDialog(
+        title = "Informations de la Station",
+        verbatimTextOutput("stationInfo"),
+        footer = modalButton("Fermer")
+      )
+    )
+    
+    output$stationInfo <- renderPrint({
+      station_info
+    })
+  })
+  
+  observeEvent(input$exportButton, {
+    # Placez ici la partie orca::plotly_export pour exporter votre graphique
+    orca::plotly_export(app = output$bike_stands_bar, file = "graphique.png", format = "png")
+    showModal(modalDialog(
+      title = "Téléchargement réussi",
+      "Le graphique a été exporté en PNG. Cliquez pour télécharger :",
+      downloadLink("downloadGraph", "Télécharger le graphique")
+    ))
+  })
+  
+  observeEvent(input$confirmDeleteButton, {
+    station_to_delete <- input$stationToDelete
+    
+    # Supprimer la station de la base de données MySQL
+    dbRemoveTable(con, "VELOVS", condition = paste0("number = '", station_to_delete, "'"))
+    
+    # Fermez le modal dialog
+    removeModal()
+  })
+  
+  
+  observeEvent(input$saveStationButton, {
+    # Récupérez les informations de la nouvelle station depuis les éléments UI
+    new_station <- data.frame(
+      name = isolate(input$new_station_name),
+      number = isolate(input$new_station_number)
+    )
+    
+    # Ajoutez la nouvelle station à la table "Stations" de la base de données MySQL
+    dbWriteTable(con, "Stations", new_station, append = TRUE)
+    
+    # Fermez le modal dialog
+    removeModal()
+  })
+  
+  
+  
+  
+  observeEvent(input$saveStationButton, {
+    # Récupérez les informations de la nouvelle station depuis les éléments UI
+    new_commune <- data.frame(
+      city = isolate(input$new_station_city),
+      postcode = isolate(input$new_station_postcode),
+      suburb = isolate(input$new_station_suburb)
+    )
+    
+    # Ajoutez la nouvelle station à la table "Communes" de la base de données MySQL
+    dbWriteTable(con, "Communes", new_commune, append = TRUE)
+    
+    # Fermez le modal dialog
+    removeModal()
+  })
+  # download
+  output$ExportPlot <- downloadHandler(
+    filename = function() {
+      "plot.png"  # Nom du fichier de sortie
+    },
+    content = function(file) {
+      # Créez une image PNG à partir du graphique Plotly en utilisant 'kaleido'
+      plotly::export_app(app = output$bike_stands_bar(), file = file, format = "png")
+    }
+  )
+  
+  
+  
+  
+  
+  observeEvent(input$saveStationButton, {
+    # Récupérez les informations de la nouvelle station depuis les éléments UI
+    new_velovs <- data.frame(
+      bike_stands = isolate(input$new_station_bike_stands),
+      available_bike_stands = isolate(input$new_station_available_bike_stands),
+      available_bikes = isolate(input$new_station_available_bikes)
+    )
+    
+    # Ajoutez la nouvelle station à la table "VELOVS" de la base de données MySQL
+    dbWriteTable(con, "VELOVS", new_velovs, append = TRUE)
+    
+    # Fermez le modal dialog
+    removeModal()
+  })
+  
+  
+  
+  
+  output$txtout <- renderText({
+    paste(input$txt, input$slider, format(input$date), sep = ", ")
+  })
+  
+  v <- reactiveValues(data = NULL)
+  
+  observeEvent(input$do, {
+    v$data <- runif(100)
+  })
+  observeEvent(input$loginButton, {
+    user <- isolate(input$username)
+    password <- isolate(input$password)
+    
+    # Vérifiez les informations d'authentification
+    auth_info <- auth_df[auth_df$nom_utilisateur == user & auth_df$mot_de_passe == password, ]
+    
+    if (nrow(auth_info) > 0) {
+      # Les informations d'authentification sont correctes
+      showModal(modalDialog(
+        title = "Authentification réussie",
+        "Vous êtes connecté en tant que", auth_info$role,
+        footer = tagList(
+          modalButton("Fermer")
+        )
+      ))
+    } else {
+      # Les informations d'authentification sont incorrectes
+      showModal(modalDialog(
+        title = "Erreur d'authentification",
+        "Nom d'utilisateur ou mot de passe incorrect",
+        footer = modalButton("Fermer")
+      ))
+    }
+  })
+  observeEvent(input$addStationButton, {
+    user <- isolate(input$username)  # Récupérez le nom d'utilisateur depuis l'entrée
+    user_info <- auth_df[auth_df$nom_utilisateur == user, ]
+    
+    if (nrow(user_info) > 0) {
+      user_role <- user_info$role  # Récupérez le rôle de l'utilisateur
+      if (user_role == "") {
+        # Si l'utilisateur est un manager, afficher les champs de saisie pour ajouter une station
+        showModal(
+          modalDialog(
+            title = "Ajouter une nouvelle station",
+            # Insérez ici les éléments UI pour collecter les informations de la nouvelle station
+            textInput("new_station_name", "Nom de la station"),
+            textInput("new_station_city", "Ville"),
+            textInput("new_station_postcode", "Code postal"),
+            textInput("new_station_suburb", "Quartier"),
+            numericInput("new_station_number", "Numéro de la station", value = 0),
+            numericInput("new_station_bike_stands", "Nombre total de supports à vélo", value = 0),
+            numericInput("new_station_available_bike_stands", "Nombre de supports à vélo disponibles", value = 0),
+            numericInput("new_station_available_bikes", "Nombre de vélos disponibles", value = 0),
+            footer = actionButton("saveStationButton", "Enregistrer")
+          )
+        )
+      } else if (user_role == "admin" || user_role == "utilisateur") {
+        # Si l'utilisateur est un admin ou un utilisateur, afficher un message d'interdiction
+        showModal(
+          modalDialog(
+            title = "Opération non autorisée",
+            "Vous n'êtes pas autorisé à ajouter des stations.",
+            footer = modalButton("Fermer")
+          )
+        )
+      }
+    } else {
+      # Si l'utilisateur n'est pas connecté, afficher un message de connexion requis
+      showModal(
+        modalDialog(
+          title = "Connexion requise",
+          "Veuillez vous connecter pour ajouter une station.",
+          footer = modalButton("Fermer")
+        )
+      )
+    }
+  })
+  
+  
+  
+  # Écoutez le bouton "Fermer" dans la fenêtre de message
+  observeEvent(input$modal, {
+    if (input$modal == "Fermer") {
+      removeModal()
+    }
+  })
+  
+  
+  
+  observeEvent(input$Effacer, {
+    v$data <- NULL
+  })
+  
+  output$plot <- renderPlot({
+    if (is.null(v$data)) return()
+    hist(v$data)
+  })
+  # fonction pour la map et les markers sur la map
+  output$map_leaflet <- renderLeaflet({
+    my_map <- leaflet() %>%
+      addTiles() %>%
+      setView(4.85, 45.75 , zoom = 30)
+    my_map <- addCircleMarkers(
+      map = my_map,
+      data = VELOVS,
+      lat = ~position.latitude,
+      lng = ~position.longitude,
+      radius = 5,
+      color = "green",
+      fill = TRUE,
+      fillOpacity = 0.5
+    )
+    
+    my_map
+  })
+  
+  output$table_db <- renderDataTable({
+    my_data_filtered <- VELOVS
+    # fonction pour la recherche des nom
+    if (input$name != "Toutes les stations") {
+      my_data_filtered <- my_data_filtered[my_data_filtered$name == input$name, ]
+    }
+    # fonction pour la recherche d'adresses
+    if (input$address != "Toutes les adresses") {
+      my_data_filtered <- my_data_filtered[my_data_filtered$address == input$address, ]
+    }
+    
+    my_data_filtered
+  })
+  # Créez un compteur réactif pour le bouton de rafraîchissement
+  refreshCounter <- reactiveVal(0)
+  
+  # Fonction pour réagir lorsque le bouton est cliqué
+  observeEvent(input$refreshButton, {
+    # Appel de la fonction pour mettre à jour les données depuis l'API
+    updateDataFromAPI()
+    
+    # Vous pouvez également ajouter un message de confirmation ici
+    showModal(modalDialog(
+      title = "Données mises à jour",
+      "Les données ont été mises à jour avec succès.",
+      footer = modalButton("Fermer")
+    ))
+  })
+  
+  # Exemple de message affiché pour montrer le rafraîchissement
+  output$message <- renderText({
+    paste("Le bouton a été cliqué", refreshCounter(), "fois.")
+  })
+  #selectionner la base de données VELOVS
+  selected_data <- reactive({
+    if (input$selected_suburb == "Tous") {
+      data <- VELOVS
+    } else {
+      data <- subset(VELOVS, suburb == input$selected_suburb)
+    }
+    return(data)
+  })
+  
+  output$status_indicator <- renderText({
+    selected_suburb <- input$selected_suburb
+    if (selected_suburb == "Tous") {
+      status_text <- "-"
+    } else {
+      data <- selected_data()
+      unique_statuses <- unique(data$status)
+      if (length(unique_statuses) > 0) {
+        status_text <- paste("Statut : ", paste(unique_statuses, collapse = ", "))
+      } else {
+        status_text <- "Statut : Aucun statut trouvé"
+      }
+    }
+    status_text
+  })
+  
+  output$bike_stands_indicator <- renderText({
+    paste("", sum(selected_data()$totalStands.capacity))
+  })
+  
+  output$available_bikes_indicator <- renderText({
+    paste("", sum(selected_data()$totalStands.availabilities.bikes))
+  })
+  
+  output$bike_stands_pie <- renderPlotly({
+    data <- selected_data()
+    bike_stands_data <- data.frame(
+      Category = c("Disponibles", "Occupés"),
+      Count = c(sum(data$totalStands.availabilities.stands), sum(data$totalStands.capacity - data$totalStands.availabilities.stands))
+    )
+    
+    fig <- plot_ly(bike_stands_data, labels = ~Category, values = ~Count, type = "pie", textinfo = "label+percent+value", marker = list(colors = c("#6AE8FC", "#FD7104")))
+    
+    fig <- fig %>% layout(title = "Répartition des supports de vélos", showlegend = FALSE)
+    
+    return(fig)
+  })
+  
+  output$bike_stands_bar <- renderPlotly({
+    data <- selected_data()
+    bike_stands_bar_data <- data.frame(
+      Category = c("Mécaniques", "Électriques"),
+      Count = c(sum(data$totalStands.availabilities.mechanicalBikes), sum(data$totalStands.availabilities.electricalBikes))
+    )
+    
+    fig <- plot_ly(bike_stands_bar_data, x = ~Count, y = ~Category, type = "bar", text = ~Count, orientation = 'v', marker = list(color = "#FD7104"))
+    
+    fig <- fig %>% layout(title = "supports de vélos mécaniques et électriques", xaxis = list(title = "Nombre"))
+    
+    return(fig)
+  })
+  
+  output$top_stations_bar <- renderPlotly({
+    data <- VELOVS
+    data <- data[order(-data$totalStands.availabilities.bikes),]
+    data <- data[1:input$top_stations_filter,]
+    
+    fig <- plot_ly(data, x = ~totalStands.availabilities.bikes, y = ~suburb, type = "bar", orientation = 'h', marker = list(color = "#6AE8FC"))
+    
+    fig <- fig %>% layout(title = "Top stations with most available bikes", xaxis = list(title = "Total Stands Availabilities Bikes"))
+    
+    return(fig)
+  })
+  observe({
+    data <- selected_data()
+    updateSelectInput(session, "selected_suburb", choices = suburbs_with_all, selected = input$selected_suburb)
+    updateSelectInput(session, "name", choices = c("Toutes les stations", unique(as.character(data$name))), selected = input$name)
+    updateSelectInput(session, "address", choices = c("Toutes les adresses", unique(as.character(data$address))), selected = input$address)
+    
+    bar_data <- data.frame(
+      Type = c("Electrical Internal Battery Bikes", "Electrical Removable Battery Bikes"),
+      Count = c(sum(data$mainStands.availabilities.electricalInternalBatteryBikes), sum(data$mainStands.availabilities.electricalRemovableBatteryBikes))
+    )
+    
+    bar_plot <- ggplot(bar_data, aes(x = Type, y = Count)) +
+      geom_bar(stat = "identity", fill = "#FD7104") +
+      labs(x = "Type de Batterie", y = "Nombre") +
+      theme_minimal()
+    
+    output$point_cloud_plot <- renderPlot({ bar_plot })
+  })
+  
+  
+  
+}
+
+
+
+
+shinyApp(ui, server)
+
+
+
